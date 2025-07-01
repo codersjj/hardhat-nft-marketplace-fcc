@@ -7,6 +7,12 @@ error NftMarketplace__PriceMustBeAboveZero();
 error NftMarketplace__NotApprovedForMarketplace();
 error NftMarketplace__AlreadyListed(address nftAddress, uint256 tokenId);
 error NftMarketplace__NotOwner();
+error NftMarketplace__NotListed(address nftAddress, uint256 tokenId);
+error NftMarketplace__PriceNotMet(
+    address nftAddress,
+    uint256 tokenId,
+    uint256 price
+);
 
 contract NftMarketplace {
     struct Listing {
@@ -20,9 +26,18 @@ contract NftMarketplace {
         address indexed seller,
         uint256 price
     );
+    event ItemBought(
+        address indexed buyer,
+        address indexed nftAddress,
+        uint256 indexed tokenId,
+        uint256 price
+    );
 
     // NFT Contract address -> NFT TokenId -> Listing
     mapping(address => mapping(uint => Listing)) private s_listings;
+
+    // Seller address -> Amount earned
+    mapping(address => uint256) private s_proceeds;
 
     modifier notListed(address nftAddress, uint256 tokenId) {
         Listing memory listing = s_listings[nftAddress][tokenId];
@@ -45,6 +60,14 @@ contract NftMarketplace {
         _;
     }
 
+    modifier isListed(address nftAddress, uint256 tokenId) {
+        Listing memory listing = s_listings[nftAddress][tokenId];
+        if (listing.price <= 0) {
+            revert NftMarketplace__NotListed(nftAddress, tokenId);
+        }
+        _;
+    }
+
     /**
      * @notice Method for listing your NFT on the marketplace
      * @param nftAddress The address of the NFT contract
@@ -61,6 +84,9 @@ contract NftMarketplace {
         notListed(nftAddress, tokenId)
         isOwner(nftAddress, tokenId, msg.sender)
     {
+        // Challenge: Have this contract accept payment in a subset of tokens as well
+        // Hint: Use Chainlink Price Feeds to convert the price of the tokens between each other
+
         if (price <= 0) {
             revert NftMarketplace__PriceMustBeAboveZero();
         }
@@ -73,5 +99,33 @@ contract NftMarketplace {
         s_listings[nftAddress][tokenId] = Listing(msg.sender, price);
 
         emit ItemListed(nftAddress, tokenId, msg.sender, price);
+    }
+
+    function buyItem(
+        address nftAddress,
+        uint256 tokenId
+    ) external payable isListed(nftAddress, tokenId) {
+        Listing memory listedItem = s_listings[nftAddress][tokenId];
+        if (msg.value < listedItem.price) {
+            revert NftMarketplace__PriceNotMet(
+                nftAddress,
+                tokenId,
+                listedItem.price
+            );
+        }
+
+        // We don't just send the seller the money...?
+        // https://fravoll.github.io/solidity-patterns/pull_over_push.html
+        // Sending the money to the User ❌
+        // Have them withdraw the money later √
+        s_proceeds[listedItem.seller] += msg.value;
+        delete s_listings[nftAddress][tokenId];
+        IERC721(nftAddress).safeTransferFrom(
+            listedItem.seller,
+            msg.sender,
+            tokenId
+        );
+        // check to make sure the NFT was transferred
+        emit ItemBought(msg.sender, nftAddress, tokenId, listedItem.price);
     }
 }
