@@ -772,6 +772,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@openzeppelin/contracts@npm:^5.3.0":
+  version: 5.3.0
+  resolution: "@openzeppelin/contracts@npm:5.3.0"
+  checksum: 10c0/b8a2d97413c24635c92de4b2a1188fa58ab252515aff38eabce4fa66bd3d8ae1649010d17fccaeb4e266bf8314c8bd92757fedca97bf643b6b98e11dea3fa83d
+  languageName: node
+  linkType: hard
+
 "@pkgjs/parseargs@npm:^0.11.0":
   version: 0.11.0
   resolution: "@pkgjs/parseargs@npm:0.11.0"
@@ -2738,6 +2745,7 @@ __metadata:
     "@nomicfoundation/hardhat-toolbox-viem": "npm:^4.0.0"
     "@nomicfoundation/hardhat-verify": "npm:^2.0.0"
     "@nomicfoundation/hardhat-viem": "npm:^2.0.0"
+    "@openzeppelin/contracts": "npm:^5.3.0"
     "@types/chai": "npm:^4.2.0"
     "@types/chai-as-promised": "npm:^7.1.6"
     "@types/mocha": "npm:>=9.1.0"
