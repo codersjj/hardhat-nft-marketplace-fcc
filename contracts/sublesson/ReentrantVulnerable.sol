@@ -8,21 +8,16 @@ contract ReentrantVulnerable {
         balances[msg.sender] += msg.value;
     }
 
-    // mutex
-    // see: https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/utils/ReentrancyGuard.sol
-    bool locked;
-
     function withdraw() public {
-        require(!locked, "Reentrant call detected");
-        locked = true; // Set the lock to prevent reentrancy
         uint256 balance = balances[msg.sender];
         require(balance > 0, "Insufficient balance");
 
+        // update the balance before we call the external contract to prevent reentrancy
+        balances[msg.sender] = 0;
+
+        // call any external contract as the last step to prevent reentrancy
         (bool sent, ) = msg.sender.call{value: balance}("");
         require(sent, "Failed to send Ether");
-
-        balances[msg.sender] = 0;
-        locked = false; // Reset the lock after the withdrawal is complete
     }
 
     // Helper function to check the balance of this contract
