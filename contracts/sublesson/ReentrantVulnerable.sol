@@ -12,14 +12,12 @@ contract ReentrantVulnerable {
         uint256 balance = balances[msg.sender];
         require(balance > 0, "Insufficient balance");
 
+        // update the balance before we call the external contract to prevent reentrancy
+        balances[msg.sender] = 0;
+
+        // call any external contract as the last step to prevent reentrancy
         (bool sent, ) = msg.sender.call{value: balance}("");
         require(sent, "Failed to send Ether");
-
-        balances[msg.sender] = 0;
-        // Vulnerable to reentrancy attack
-        // The two most common kinds of attacks in Solidity are:
-        // 1. reentrancy attacks
-        // 2. oracle attacks
     }
 
     // Helper function to check the balance of this contract
