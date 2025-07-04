@@ -14,6 +14,7 @@ error NftMarketplace__PriceNotMet(
     uint256 tokenId,
     uint256 price
 );
+error NftMarketplace__NoProceeds();
 
 contract NftMarketplace is ReentrancyGuard {
     struct Listing {
@@ -32,6 +33,11 @@ contract NftMarketplace is ReentrancyGuard {
         address indexed nftAddress,
         uint256 indexed tokenId,
         uint256 price
+    );
+    event ItemCanceled(
+        address indexed seller,
+        address indexed nftAddress,
+        uint256 indexed tokenId
     );
 
     // NFT Contract address -> NFT TokenId -> Listing
@@ -128,5 +134,44 @@ contract NftMarketplace is ReentrancyGuard {
         );
         // check to make sure the NFT was transferred
         emit ItemBought(msg.sender, nftAddress, tokenId, listedItem.price);
+    }
+
+    function cancelItem(
+        address nftAddress,
+        uint256 tokenId
+    )
+        external
+        isOwner(nftAddress, tokenId, msg.sender)
+        isListed(nftAddress, tokenId)
+    {
+        delete (s_listings[nftAddress][tokenId]);
+        emit ItemCanceled(msg.sender, nftAddress, tokenId);
+    }
+
+    function updateListing(
+        address nftAddress,
+        uint256 tokenId,
+        uint256 newPrice
+    )
+        external
+        isListed(nftAddress, tokenId)
+        isOwner(nftAddress, tokenId, msg.sender)
+        nonReentrant
+    {
+        if (newPrice <= 0) {
+            revert NftMarketplace__PriceMustBeAboveZero();
+        }
+        s_listings[nftAddress][tokenId].price = newPrice;
+        emit ItemListed(nftAddress, tokenId, msg.sender, newPrice);
+    }
+
+    function withdrawProceeds() external {
+        uint256 proceeds = s_proceeds[msg.sender];
+        if (proceeds <= 0) {
+            revert NftMarketplace__NoProceeds();
+        }
+        s_proceeds[msg.sender] = 0;
+        (bool sent, ) = msg.sender.call{value: proceeds}("");
+        require(sent, "Transfer failed");
     }
 }
