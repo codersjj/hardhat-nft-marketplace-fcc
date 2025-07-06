@@ -174,4 +174,15 @@ contract NftMarketplace is ReentrancyGuard {
         (bool sent, ) = msg.sender.call{value: proceeds}("");
         require(sent, "Transfer failed");
     }
+
+    function getListing(
+        address nftAddress,
+        uint256 tokenId
+    ) public view returns (Listing memory) {
+        return s_listings[nftAddress][tokenId];
+    }
+
+    function getProceeds(address seller) public view returns (uint256) {
+        return s_proceeds[seller];
+    }
 }
