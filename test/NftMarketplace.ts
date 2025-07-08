@@ -129,4 +129,79 @@ describe("NftMarketplace", () => {
       assert.equal(listing.price, PRICE);
     });
   });
+
+  describe("buyItem", () => {
+    it("reverts if the item is not listed", async () => {
+      const { nftMarketplace, basicNft, TOKEN_ID, PRICE } = await loadFixture(
+        deployNftMarketplaceFixture
+      );
+
+      await expect(
+        nftMarketplace.write.buyItem([basicNft.address, TOKEN_ID], {
+          value: PRICE,
+        })
+      ).to.be.rejectedWith("NftMarketplace__NotListed");
+    });
+
+    it("reverts if the price is not met", async () => {
+      const { nftMarketplace, basicNft, TOKEN_ID, PRICE } = await loadFixture(
+        deployNftMarketplaceFixture
+      );
+
+      await nftMarketplace.write.listItem([basicNft.address, TOKEN_ID, PRICE]);
+
+      const tooLowPrice = PRICE - 1n;
+      await expect(
+        nftMarketplace.write.buyItem([basicNft.address, TOKEN_ID], {
+          value: tooLowPrice,
+        })
+      ).to.be.rejectedWith("NftMarketplace__PriceNotMet");
+    });
+
+    it("updates internal proceeds record for the seller and transfer the NFT to the buyer", async () => {
+      const {
+        nftMarketplace,
+        basicNft,
+        TOKEN_ID,
+        PRICE,
+        deployer,
+        player,
+        publicClient,
+      } = await loadFixture(deployNftMarketplaceFixture);
+
+      await nftMarketplace.write.listItem([basicNft.address, TOKEN_ID, PRICE]);
+
+      const deployerProceedsBefore = await nftMarketplace.read.getProceeds([
+        deployer.account.address,
+      ]);
+
+      const hash = await nftMarketplace.write.buyItem(
+        [basicNft.address, TOKEN_ID],
+        {
+          value: PRICE,
+          account: player.account,
+        }
+      );
+      await publicClient.waitForTransactionReceipt({ hash });
+
+      const itemBoughtEvents = await nftMarketplace.getEvents.ItemBought();
+      expect(itemBoughtEvents).to.have.lengthOf(1);
+      expect(itemBoughtEvents[0].args.buyer).to.equal(
+        getAddress(player.account.address)
+      );
+      expect(itemBoughtEvents[0].args.nftAddress).to.equal(
+        getAddress(basicNft.address)
+      );
+      expect(itemBoughtEvents[0].args.tokenId).to.equal(TOKEN_ID);
+      expect(itemBoughtEvents[0].args.price).to.equal(PRICE);
+
+      const deployerProceedsAfter = await nftMarketplace.read.getProceeds([
+        deployer.account.address,
+      ]);
+      const newOwner = await basicNft.read.ownerOf([TOKEN_ID]);
+
+      assert.equal(deployerProceedsAfter, deployerProceedsBefore + PRICE);
+      assert.equal(newOwner, getAddress(player.account.address));
+    });
+  });
 });
