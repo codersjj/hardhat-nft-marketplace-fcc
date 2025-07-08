@@ -267,4 +267,79 @@ describe("NftMarketplace", () => {
       assert.equal(listing.seller, zeroAddress);
     });
   });
+
+  describe("updateListing", () => {
+    it("reverts if the item is not listed", async () => {
+      const { nftMarketplace, basicNft, TOKEN_ID, PRICE } = await loadFixture(
+        deployNftMarketplaceFixture
+      );
+      const error = `NftMarketplace__NotListed("${getAddress(
+        basicNft.address
+      )}", ${TOKEN_ID})`;
+
+      await expect(
+        nftMarketplace.write.updateListing([
+          basicNft.address,
+          TOKEN_ID,
+          PRICE * 2n,
+        ])
+      ).to.be.rejectedWith(error);
+    });
+
+    it("reverts if anyone but the owner tries to update", async () => {
+      const { nftMarketplace, basicNft, TOKEN_ID, PRICE, player } =
+        await loadFixture(deployNftMarketplaceFixture);
+      await nftMarketplace.write.listItem([basicNft.address, TOKEN_ID, PRICE]);
+      await expect(
+        nftMarketplace.write.updateListing(
+          [basicNft.address, TOKEN_ID, PRICE * 2n],
+          { account: player.account }
+        )
+      ).to.be.rejectedWith("NftMarketplace__NotOwner");
+    });
+
+    it("reverts if the price is set to 0", async () => {
+      const { nftMarketplace, basicNft, TOKEN_ID, PRICE } = await loadFixture(
+        deployNftMarketplaceFixture
+      );
+      await nftMarketplace.write.listItem([basicNft.address, TOKEN_ID, PRICE]);
+      await expect(
+        nftMarketplace.write.updateListing([basicNft.address, TOKEN_ID, 0n])
+      ).to.be.rejectedWith("NftMarketplace__PriceMustBeAboveZero");
+    });
+
+    it("updates the price of the listing and emits an event", async () => {
+      const {
+        nftMarketplace,
+        basicNft,
+        TOKEN_ID,
+        PRICE,
+        deployer,
+        publicClient,
+      } = await loadFixture(deployNftMarketplaceFixture);
+      await nftMarketplace.write.listItem([basicNft.address, TOKEN_ID, PRICE]);
+      const newPrice = PRICE * 2n;
+      const hash = await nftMarketplace.write.updateListing([
+        basicNft.address,
+        TOKEN_ID,
+        newPrice,
+      ]);
+      await publicClient.waitForTransactionReceipt({ hash });
+
+      const itemListedEvents = await nftMarketplace.getEvents.ItemListed();
+      const listing = await nftMarketplace.read.getListing([
+        basicNft.address,
+        TOKEN_ID,
+      ]);
+
+      expect(itemListedEvents).to.have.lengthOf(1);
+      const { nftAddress, tokenId, seller, price } = itemListedEvents[0].args;
+      expect(nftAddress).to.equal(getAddress(basicNft.address));
+      expect(tokenId).to.equal(TOKEN_ID);
+      expect(seller).to.equal(getAddress(deployer.account.address));
+      expect(price).to.equal(newPrice);
+
+      assert.equal(listing.price, newPrice);
+    });
+  });
 });
