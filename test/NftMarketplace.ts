@@ -1,7 +1,7 @@
 import { loadFixture } from "@nomicfoundation/hardhat-network-helpers";
 import hre from "hardhat";
-import { parseEther, getAddress } from "viem";
-import { expect } from "chai";
+import { parseEther, getAddress, zeroAddress } from "viem";
+import { expect, assert } from "chai";
 
 describe("NftMarketplace", () => {
   const deployNftMarketplaceFixture = async () => {
@@ -62,6 +62,71 @@ describe("NftMarketplace", () => {
         getAddress(deployer.account.address)
       );
       expect(itemListedEvents[0].args.price).to.equal(PRICE);
+    });
+
+    it("exclusively items that haven't been listed", async () => {
+      const { nftMarketplace, basicNft, TOKEN_ID, PRICE } = await loadFixture(
+        deployNftMarketplaceFixture
+      );
+      await nftMarketplace.write.listItem([basicNft.address, TOKEN_ID, PRICE]);
+      const error = `NftMarketplace__AlreadyListed("${getAddress(
+        basicNft.address
+      )}", ${TOKEN_ID})`;
+      await expect(
+        nftMarketplace.write.listItem([basicNft.address, TOKEN_ID, PRICE])
+      ).to.be.rejectedWith("NftMarketplace__AlreadyListed");
+      await expect(
+        nftMarketplace.write.listItem([basicNft.address, TOKEN_ID, PRICE])
+      ).to.be.rejectedWith(error);
+    });
+
+    it("exclusively allows owners to list", async () => {
+      const { nftMarketplace, basicNft, TOKEN_ID, PRICE, deployer, player } =
+        await loadFixture(deployNftMarketplaceFixture);
+
+      const owner = await basicNft.read.ownerOf([TOKEN_ID]);
+      expect(owner).to.equal(getAddress(deployer.account.address));
+      expect(owner).to.not.equal(getAddress(player.account.address));
+
+      await basicNft.write.approve([player.account.address, TOKEN_ID]);
+
+      await expect(
+        nftMarketplace.write.listItem([basicNft.address, TOKEN_ID, PRICE], {
+          account: player.account,
+        })
+      ).to.be.rejectedWith("NftMarketplace__NotOwner");
+    });
+
+    it("reverts if the price is set to 0", async () => {
+      const { nftMarketplace, basicNft, TOKEN_ID } = await loadFixture(
+        deployNftMarketplaceFixture
+      );
+      await expect(
+        nftMarketplace.write.listItem([basicNft.address, TOKEN_ID, 0n])
+      ).to.be.rejectedWith("NftMarketplace__PriceMustBeAboveZero");
+    });
+
+    it("needs approvals to list item", async () => {
+      const { nftMarketplace, basicNft, TOKEN_ID, PRICE } = await loadFixture(
+        deployNftMarketplaceFixture
+      );
+      await basicNft.write.approve([zeroAddress, TOKEN_ID]);
+      await expect(
+        nftMarketplace.write.listItem([basicNft.address, TOKEN_ID, PRICE])
+      ).to.be.rejectedWith("NftMarketplace__NotApprovedForMarketplace");
+    });
+
+    it("updates listing with seller and price", async () => {
+      const { nftMarketplace, basicNft, TOKEN_ID, PRICE, deployer } =
+        await loadFixture(deployNftMarketplaceFixture);
+
+      await nftMarketplace.write.listItem([basicNft.address, TOKEN_ID, PRICE]);
+      const listing = await nftMarketplace.read.getListing([
+        basicNft.address,
+        TOKEN_ID,
+      ]);
+      assert.equal(listing.seller, getAddress(deployer.account.address));
+      assert.equal(listing.price, PRICE);
     });
   });
 });
