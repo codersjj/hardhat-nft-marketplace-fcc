@@ -204,4 +204,67 @@ describe("NftMarketplace", () => {
       assert.equal(newOwner, getAddress(player.account.address));
     });
   });
+
+  describe("cancelItem", () => {
+    it("reverts if anyone but the owner tries to cancel", async () => {
+      const { nftMarketplace, basicNft, TOKEN_ID, PRICE, player } =
+        await loadFixture(deployNftMarketplaceFixture);
+      await nftMarketplace.write.listItem([basicNft.address, TOKEN_ID, PRICE]);
+      await expect(
+        nftMarketplace.write.cancelItem([basicNft.address, TOKEN_ID], {
+          account: player.account,
+        })
+      ).to.be.rejectedWith("NftMarketplace__NotOwner");
+    });
+
+    it("reverts if the item is not listed", async () => {
+      const { nftMarketplace, basicNft, TOKEN_ID, PRICE } = await loadFixture(
+        deployNftMarketplaceFixture
+      );
+      const error = `NftMarketplace__NotListed("${getAddress(
+        basicNft.address
+      )}", ${TOKEN_ID})`;
+
+      await expect(
+        nftMarketplace.write.buyItem([basicNft.address, TOKEN_ID], {
+          value: PRICE,
+        })
+      ).to.be.rejectedWith(error);
+    });
+
+    it("removes the listing and emits an event", async () => {
+      const {
+        nftMarketplace,
+        basicNft,
+        TOKEN_ID,
+        PRICE,
+        deployer,
+        publicClient,
+      } = await loadFixture(deployNftMarketplaceFixture);
+
+      await nftMarketplace.write.listItem([basicNft.address, TOKEN_ID, PRICE]);
+
+      const hash = await nftMarketplace.write.cancelItem([
+        basicNft.address,
+        TOKEN_ID,
+      ]);
+      await publicClient.waitForTransactionReceipt({ hash });
+
+      const itemCancelledEvents = await nftMarketplace.getEvents.ItemCanceled();
+      expect(itemCancelledEvents).to.have.lengthOf(1);
+      expect(itemCancelledEvents[0].args.seller).to.equal(
+        getAddress(deployer.account.address)
+      );
+      expect(itemCancelledEvents[0].args.nftAddress).to.equal(
+        getAddress(basicNft.address)
+      );
+      expect(itemCancelledEvents[0].args.tokenId).to.equal(TOKEN_ID);
+
+      const listing = await nftMarketplace.read.getListing([
+        basicNft.address,
+        TOKEN_ID,
+      ]);
+      assert.equal(listing.seller, zeroAddress);
+    });
+  });
 });
