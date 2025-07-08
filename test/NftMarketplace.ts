@@ -342,4 +342,52 @@ describe("NftMarketplace", () => {
       assert.equal(listing.price, newPrice);
     });
   });
+
+  describe("withdrawProceeds", () => {
+    it("doesn't allow 0 proceed withdrawls", async () => {
+      const { nftMarketplace } = await loadFixture(deployNftMarketplaceFixture);
+      await expect(nftMarketplace.write.withdrawProceeds()).to.be.rejectedWith(
+        "NftMarketplace__NoProceeds"
+      );
+    });
+
+    it("withdraws proceeds", async () => {
+      const {
+        nftMarketplace,
+        basicNft,
+        TOKEN_ID,
+        PRICE,
+        deployer,
+        player,
+        publicClient,
+      } = await loadFixture(deployNftMarketplaceFixture);
+      await nftMarketplace.write.listItem([basicNft.address, TOKEN_ID, PRICE]);
+      await nftMarketplace.write.buyItem([basicNft.address, TOKEN_ID], {
+        value: PRICE,
+        account: player.account,
+      });
+      const sellerProceedsBefore = await nftMarketplace.read.getProceeds([
+        deployer.account.address,
+      ]);
+      const sellerBalanceBefore = await publicClient.getBalance({
+        address: deployer.account.address,
+      });
+      const hash = await nftMarketplace.write.withdrawProceeds();
+      const txReceipt = await publicClient.waitForTransactionReceipt({ hash });
+      const { gasUsed, effectiveGasPrice } = txReceipt;
+
+      const sellerProceedsAfter = await nftMarketplace.read.getProceeds([
+        deployer.account.address,
+      ]);
+      const sellerBalanceAfter = await publicClient.getBalance({
+        address: deployer.account.address,
+      });
+
+      assert.equal(sellerProceedsAfter, 0n);
+      assert.equal(
+        sellerBalanceAfter + gasUsed * effectiveGasPrice,
+        sellerBalanceBefore + sellerProceedsBefore
+      );
+    });
+  });
 });
